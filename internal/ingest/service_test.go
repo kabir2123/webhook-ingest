@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 
+	"github.com/convin/webhook-ingest/internal/ingest"
 	"github.com/convin/webhook-ingest/internal/testutil"
 )
 
@@ -82,3 +84,56 @@ func TestDuplicateDeliveryIsIgnored(t *testing.T) {
 		t.Fatalf("stored %d copies of %s, want 1", n, eventID)
 	}
 }
+
+func TestConcurrentDuplicateDelivery(t *testing.T) {
+	svc, st := testutil.NewService(t)
+	eventID, callID, accountID := testutil.IDs(t, st)
+	ctx := context.Background()
+
+	evt := ingest.Event{
+		EventID:     eventID,
+		CallID:      callID,
+		AccountID:   accountID,
+		Status:      "completed",
+		DurationSec: 143,
+	}
+
+	const workers = 20
+	var wg sync.WaitGroup
+	wg.Add(workers)
+
+	// gate ensures all goroutines call Ingest at roughly the same instant.
+	gate := make(chan struct{})
+
+	for i := 0; i < workers; i++ {
+		go func() {
+			defer wg.Done()
+			<-gate
+			_ = svc.Ingest(ctx, evt)
+		}()
+	}
+
+	close(gate) // release all goroutines at once
+	wg.Wait()
+
+	// There must be exactly one event row.
+	var eventCount int
+	row := st.Pool().QueryRow(ctx, `SELECT count(*) FROM events WHERE event_id = $1`, eventID)
+	if err := row.Scan(&eventCount); err != nil {
+		t.Fatalf("scan events: %v", err)
+	}
+	if eventCount != 1 {
+		t.Fatalf("stored %d copies of event %s, want exactly 1", eventCount, eventID)
+	}
+
+	// The account stats must show exactly one call.
+	var callCount int64
+	row = st.Pool().QueryRow(ctx, `SELECT call_count FROM account_stats WHERE account_id = $1`, accountID)
+	if err := row.Scan(&callCount); err != nil {
+		t.Fatalf("scan account_stats: %v", err)
+	}
+	if callCount != 1 {
+		t.Fatalf("call_count = %d for %s, want 1", callCount, accountID)
+	}
+}
+
