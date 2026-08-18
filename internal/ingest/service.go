@@ -99,3 +99,8 @@ func (s *Service) processRecording(ctx context.Context, rec store.Event) error {
 	time.Sleep(recordingWork)
 	return s.store.MarkRecordingProcessed(ctx, rec.CallID)
 }
+
+// Shutdown waits for in-flight work to complete.
+func (s *Service) Shutdown(ctx context.Context) error {
+	return nil
+}

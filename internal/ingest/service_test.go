@@ -167,3 +167,39 @@ func TestConcurrentDuplicateDelivery(t *testing.T) {
 	}
 }
 
+func TestShutdownWaitsForRecordings(t *testing.T) {
+	svc, st := testutil.NewService(t)
+	eventID, callID, accountID := testutil.IDs(t, st)
+	ctx := context.Background()
+
+	evt := ingest.Event{
+		EventID:      eventID,
+		CallID:       callID,
+		AccountID:    accountID,
+		Status:       "completed",
+		DurationSec:  42,
+		RecordingURL: "https://recordings.example.com/shutdown-test.wav",
+	}
+
+	if err := svc.Ingest(ctx, evt); err != nil {
+		t.Fatalf("Ingest: %v", err)
+	}
+
+	// Shutdown should block until the recording goroutine finishes.
+	shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := svc.Shutdown(shutdownCtx); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+
+	// After Shutdown returns, the recording must have been processed.
+	var processed bool
+	row := st.Pool().QueryRow(ctx,
+		`SELECT recording_processed FROM calls WHERE call_id = $1`, callID)
+	if err := row.Scan(&processed); err != nil {
+		t.Fatalf("scan recording_processed: %v", err)
+	}
+	if !processed {
+		t.Fatal("recording_processed was not set to TRUE after Shutdown")
+	}
+}
