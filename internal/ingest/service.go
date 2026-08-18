@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -23,6 +24,7 @@ type Service struct {
 	cache *stats.Cache
 	rdb   *redis.Client
 	log   *slog.Logger
+	wg    sync.WaitGroup
 }
 
 // New builds a Service.
@@ -81,7 +83,9 @@ func (s *Service) Ingest(ctx context.Context, evt Event) error {
 
 	// Recordings are slow to fetch, so that part does not block the provider.
 	if rec.RecordingURL != "" {
+		s.wg.Add(1)
 		go func() {
+			defer s.wg.Done()
 			bgCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			if err := s.processRecording(bgCtx, rec); err != nil {
@@ -100,7 +104,18 @@ func (s *Service) processRecording(ctx context.Context, rec store.Event) error {
 	return s.store.MarkRecordingProcessed(ctx, rec.CallID)
 }
 
-// Shutdown waits for in-flight work to complete.
+// Shutdown waits for in-flight recording goroutines to complete, or returns
+// early if the context deadline fires.
 func (s *Service) Shutdown(ctx context.Context) error {
-	return nil
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }

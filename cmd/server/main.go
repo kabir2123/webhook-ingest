@@ -60,4 +60,7 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error("shutdown", "err", err)
 	}
+	if err := svc.Shutdown(shutdownCtx); err != nil {
+		log.Error("service shutdown", "err", err)
+	}
 }
