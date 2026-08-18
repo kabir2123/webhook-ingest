@@ -50,7 +50,9 @@ go test ./...                  # the visible test suite
 **Already running Postgres or Redis locally?** The published host ports are
 overridable — copy `.env.example` to `.env` and change `APP_PORT`,
 `POSTGRES_PORT`, `REDIS_PORT`, then point `DATABASE_URL` and `REDIS_ADDR` at
-your chosen ports so `go test ./...` finds them.
+your chosen ports so `go test ./...` finds them. Then run `source .env` (or
+`export $(grep -v '^#' .env | xargs)`) before running `go test` — the service
+reads configuration from environment variables, not from the file directly.
 
 Tests run against the Postgres started by Compose, so bring the stack up first.
 They clean up after themselves and are safe to run repeatedly.

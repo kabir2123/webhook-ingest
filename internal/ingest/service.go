@@ -97,8 +97,9 @@ func (s *Service) Ingest(ctx context.Context, evt Event) error {
 	return nil
 }
 
-// processRecording downloads and transcodes the call recording, then marks
-// the call as done.
+// processRecording simulates the recording-processing pipeline (download +
+// transcode) with a fixed delay, then marks the call as processed. This is
+// a placeholder for work that would, in production, be a real async job.
 func (s *Service) processRecording(ctx context.Context, rec store.Event) error {
 	time.Sleep(recordingWork)
 	return s.store.MarkRecordingProcessed(ctx, rec.CallID)
