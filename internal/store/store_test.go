@@ -26,8 +26,12 @@ func TestInsertEventThenExists(t *testing.T) {
 		t.Fatal("expected event to be absent before insert")
 	}
 
-	if err := s.InsertEvent(ctx, evt); err != nil {
+	inserted, err := s.InsertEvent(ctx, s.Pool(), evt)
+	if err != nil {
 		t.Fatalf("InsertEvent: %v", err)
+	}
+	if !inserted {
+		t.Fatal("expected first insert to succeed")
 	}
 
 	exists, err = s.EventExists(ctx, eventID)
@@ -44,10 +48,10 @@ func TestIncrementAccountStatsAccumulates(t *testing.T) {
 	_, _, accountID := testutil.IDs(t, s)
 	ctx := context.Background()
 
-	if err := s.IncrementAccountStats(ctx, accountID, 30); err != nil {
+	if err := s.IncrementAccountStats(ctx, s.Pool(), accountID, 30); err != nil {
 		t.Fatalf("IncrementAccountStats: %v", err)
 	}
-	if err := s.IncrementAccountStats(ctx, accountID, 12); err != nil {
+	if err := s.IncrementAccountStats(ctx, s.Pool(), accountID, 12); err != nil {
 		t.Fatalf("IncrementAccountStats: %v", err)
 	}
 
@@ -70,7 +74,7 @@ func TestUpsertCallThenMarkRecordingProcessed(t *testing.T) {
 		Status: "completed", DurationSec: 10,
 		RecordingURL: "https://example.com/a.wav", Payload: []byte(`{}`),
 	}
-	if err := s.UpsertCall(ctx, evt); err != nil {
+	if err := s.UpsertCall(ctx, s.Pool(), evt); err != nil {
 		t.Fatalf("UpsertCall: %v", err)
 	}
 	if err := s.MarkRecordingProcessed(ctx, callID); err != nil {
